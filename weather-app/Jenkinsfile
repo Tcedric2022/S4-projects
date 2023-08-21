@@ -11,22 +11,22 @@ pipeline {
         
         stage('Build') {
             steps {
-                
-                sh 'npm '
+                // Install dependencies and build your application
+                sh 'npm install'
             
             }
         }
         
         stage('Test') {
             steps {
-              
+                // Run tests
                 sh 'npm test'
             }
         }
         
         stage('Deploy') {
             steps {
-            
+                // Deploy your application
                 sh 'npm deploy'
             }
         }
