@@ -1,34 +1,82 @@
 pipeline {
     agent any
     
+    parameters {
+        string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Target environment for deployment')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Run tests during the pipeline')
+    }
+    
+    environment {
+        PATH = "$PATH:/usr/local/bin"
+        AWS_REGION = 'us-west-2'
+    }
+    
+    options {
+        skipDefaultCheckout() // Skip the default checkout step
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+    
     stages {
         stage('Checkout') {
             steps {
-                // Checkout the source code from your version control system
-                sh 'npm install'
+                checkout scm
             }
         }
         
         stage('Build') {
             steps {
-                // Install dependencies and build your application
-                sh 'npm install'
-            
+                script {
+                    def dockerImage = docker.build("myapp:${env.BUILD_NUMBER}")
+                    sh "docker save -o myapp_${env.BUILD_NUMBER}.tar ${dockerImage.id}"
+                }
             }
         }
         
         stage('Test') {
+            when {
+                expression { params.RUN_TESTS == true }
+            }
             steps {
-                // Run tests
+                sh 'npm install'
                 sh 'npm test'
+            }
+            post {
+                always {
+                    junit '**/test-results/*.xml'
+                }
+                success {
+                    archiveArtifacts artifacts: '**/target/*.jar', allowEmptyArchive: true
+                }
             }
         }
         
         stage('Deploy') {
-            steps {
-                // Deploy your application
-                sh 'npm deploy'
+            when {
+                expression { currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
             }
+            steps {
+                script {
+                    if (params.ENVIRONMENT == 'prod') {
+                        sh 'kubectl apply -f k8s/prod.yaml'
+                    } else {
+                        sh 'kubectl apply -f k8s/dev.yaml'
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo 'Pipeline succeeded! :)'
+        }
+        failure {
+            echo 'Pipeline failed :('
+            mail to: 'team@example.com', subject: "Pipeline Failed for Build ${env.BUILD_NUMBER}", body: "The pipeline for build ${env.BUILD_NUMBER} has failed. Please investigate."
         }
     }
 }
