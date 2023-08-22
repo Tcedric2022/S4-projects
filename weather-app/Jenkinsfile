@@ -27,7 +27,7 @@ pipeline {
         stage('Build') {
             steps {
                 script {
-                    def dockerImage = docker.build("myapp:${env.BUILD_NUMBER}")
+                    
                     sh "docker save -o myapp_${env.BUILD_NUMBER}.tar ${dockerImage.id}"
                 }
             }
